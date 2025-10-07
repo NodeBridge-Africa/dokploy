@@ -11,14 +11,35 @@ import { z } from "zod";
 import { getStripeItems, WEBSITE_URL } from "@/server/utils/stripe";
 import { adminProcedure, createTRPCRouter } from "../trpc";
 
+const STRIPE_API_VERSION = "2024-09-30.acacia";
+
+const getStripeClient = () => {
+	if (!STRIPE_ENABLED) {
+		throw new TRPCError({
+			code: "PRECONDITION_FAILED",
+			message: "Stripe billing is disabled.",
+		});
+	}
+
+	const secretKey = process.env.STRIPE_SECRET_KEY;
+	if (!secretKey) {
+		throw new TRPCError({
+			code: "PRECONDITION_FAILED",
+			message: "Stripe secret key is not configured.",
+		});
+	}
+
+	return new Stripe(secretKey, {
+		apiVersion: STRIPE_API_VERSION,
+	});
+};
+
 export const stripeRouter = createTRPCRouter({
 	getProducts: adminProcedure.query(async ({ ctx }) => {
 		const user = await findUserById(ctx.user.ownerId);
 		const stripeCustomerId = user.stripeCustomerId;
 
-		const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, {
-			apiVersion: "2024-09-30.acacia",
-		});
+		const stripe = getStripeClient();
 
 		const products = await stripe.products.list({
 			expand: ["data.default_price"],
@@ -52,9 +73,7 @@ export const stripeRouter = createTRPCRouter({
 			}),
 		)
 		.mutation(async ({ ctx, input }) => {
-			const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, {
-				apiVersion: "2024-09-30.acacia",
-			});
+			const stripe = getStripeClient();
 
 			const items = getStripeItems(input.serverQuantity, input.isAnnual);
 			const user = await findUserById(ctx.user.id);
@@ -103,9 +122,7 @@ export const stripeRouter = createTRPCRouter({
 		}
 		const stripeCustomerId = user.stripeCustomerId;
 
-		const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, {
-			apiVersion: "2024-09-30.acacia",
-		});
+		const stripe = getStripeClient();
 
 		try {
 			console.log("Creating Stripe customer portal session", {

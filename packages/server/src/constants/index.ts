@@ -59,7 +59,22 @@ export const BRAND_DOCS_URL =
 	defaultDocsUrl;
 
 export const IS_CLOUD = parseBooleanEnv(process.env.IS_CLOUD, false);
-export const STRIPE_ENABLED = parseBooleanEnv(process.env.STRIPE_ENABLED, true);
+
+const hasStripeSecretKey = normalize(process.env.STRIPE_SECRET_KEY) !== undefined;
+const hasStripeWebhookSecret = normalize(process.env.STRIPE_WEBHOOK_SECRET) !== undefined;
+const hasStripePublishableKey =
+	normalize(
+		process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY ??
+		process.env.STRIPE_PUBLISHABLE_KEY,
+	) !== undefined;
+
+const rawStripeEnabled = parseBooleanEnv(process.env.STRIPE_ENABLED, true);
+
+export const STRIPE_ENABLED =
+	rawStripeEnabled &&
+	hasStripeSecretKey &&
+	hasStripePublishableKey &&
+	hasStripeWebhookSecret;
 
 export const paths = (isServer = false) => {
   const forceLocalPaths = parseBooleanEnv(

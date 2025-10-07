@@ -10,13 +10,16 @@ import { TRPCError } from "@trpc/server";
 import { eq } from "drizzle-orm";
 
 export const createSshKey = async (input: typeof apiCreateSshKey._type) => {
-	await db.transaction(async (tx) => {
+	return await db.transaction(async (tx) => {
 		const sshKey = await tx
 			.insert(sshKeys)
 			.values(input)
 			.returning()
 			.then((response) => response[0])
-			.catch((e) => console.error(e));
+			.catch((e) => {
+				console.error(e);
+				return undefined;
+			});
 
 		if (!sshKey) {
 			throw new TRPCError({

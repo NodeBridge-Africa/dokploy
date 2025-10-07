@@ -184,6 +184,19 @@ INSERT INTO server (
 );
 ```
 
+### Proxmox Automation (Beta)
+
+GuildServer can now orchestrate dedicated Proxmox guest provisioning through the bundled Proxmox API wrapper (`paas-backend`). To enable it:
+
+- Configure the new environment variables on the GuildServer API process:
+  - `PROXMOX_BACKEND_URL` – URL where the paas-backend service is reachable.
+  - `PROXMOX_BACKEND_TOKEN` – Optional bearer token if you secure the backend.
+  - `PROXMOX_BACKEND_TIMEOUT` – Request timeout in milliseconds (default `15000`).
+- Run the `paas-backend` service (see `paas-backend/README.md`) and ensure Redis is available for background workers.
+- Create a server from the dashboard and choose **Proxmox managed**. Pick the Proxmox node, template VM, target VM ID, hostname, and storage.
+- A provisioning worker clones the template, tracks the Proxmox task, and updates the server record. Status appears in *Settings → Servers* under the Provisioner column.
+- Workers start automatically alongside the main server process when `IS_CLOUD=false`.
+
 ## 🛠️ Features
 
 ### Applications

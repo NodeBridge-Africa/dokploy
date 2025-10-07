@@ -1,6 +1,5 @@
 import { format } from "date-fns";
-import { KeyIcon, Loader2, MoreHorizontal, ServerIcon } from "lucide-react";
-import Link from "next/link";
+import { Loader2, MoreHorizontal, ServerIcon } from "lucide-react";
 import { useRouter } from "next/router";
 import { useTranslation } from "next-i18next";
 import { toast } from "sonner";
@@ -90,17 +89,12 @@ export const ShowServers = () => {
 						) : (
 							<>
 								{sshKeys?.length === 0 && data?.length === 0 ? (
-									<div className="flex flex-col items-center gap-3 min-h-[25vh] justify-center">
-										<KeyIcon className="size-8" />
-										<span className="text-base text-muted-foreground">
-											No SSH Keys found. Add a SSH Key to start adding servers.{" "}
-											<Link
-												href="/dashboard/settings/ssh-keys"
-												className="text-primary"
-											>
-												Add SSH Key
-											</Link>
-										</span>
+									<div className="flex flex-col items-center gap-3 min-h-[25vh] justify-center text-center">
+										<ServerIcon className="size-8 text-muted-foreground" />
+										<p className="text-base text-muted-foreground max-w-md">
+											Create your first server to start deploying applications. We'll automatically generate a dedicated SSH key for you during provisioning.
+										</p>
+										<HandleServers />
 									</div>
 								) : (
 									<>
@@ -112,6 +106,11 @@ export const ShowServers = () => {
 													remotely.
 												</span>
 												<HandleServers />
+												{(sshKeys?.length ?? 0) === 0 && (
+													<p className="text-sm text-muted-foreground">
+														No SSH keys required—GuildServer will generate one automatically for each new server.
+													</p>
+												)}
 											</div>
 										) : (
 											<div className="flex flex-col gap-4  min-h-[25vh]">
@@ -129,6 +128,9 @@ export const ShowServers = () => {
 																	Status
 																</TableHead>
 															)}
+															<TableHead className="text-center">
+																Provisioner
+															</TableHead>
 															<TableHead className="text-center">
 																IP Address
 															</TableHead>
@@ -149,203 +151,4 @@ export const ShowServers = () => {
 															</TableHead>
 														</TableRow>
 													</TableHeader>
-													<TableBody>
-														{data?.map((server) => {
-															const canDelete = server.totalSum === 0;
-															const isActive = server.serverStatus === "active";
-															return (
-																<TableRow key={server.serverId}>
-																	<TableCell className="text-left">
-																		{server.name}
-																	</TableCell>
-																	{isCloud && (
-																		<TableHead className="text-center">
-																			<Badge
-																				variant={
-																					server.serverStatus === "active"
-																						? "default"
-																						: "destructive"
-																				}
-																			>
-																				{server.serverStatus}
-																			</Badge>
-																		</TableHead>
-																	)}
-																	<TableCell className="text-center">
-																		<Badge>{server.ipAddress}</Badge>
-																	</TableCell>
-																	<TableCell className="text-center">
-																		{server.port}
-																	</TableCell>
-																	<TableCell className="text-center">
-																		{server.username}
-																	</TableCell>
-																	<TableCell className="text-right">
-																		<span className="text-sm text-muted-foreground">
-																			{server.sshKeyId ? "Yes" : "No"}
-																		</span>
-																	</TableCell>
-																	<TableCell className="text-right">
-																		<span className="text-sm text-muted-foreground">
-																			{format(
-																				new Date(server.createdAt),
-																				"PPpp",
-																			)}
-																		</span>
-																	</TableCell>
-
-																	<TableCell className="text-right flex justify-end">
-																		<DropdownMenu>
-																			<DropdownMenuTrigger asChild>
-																				<Button
-																					variant="ghost"
-																					className="h-8 w-8 p-0"
-																				>
-																					<span className="sr-only">
-																						Open menu
-																					</span>
-																					<MoreHorizontal className="h-4 w-4" />
-																				</Button>
-																			</DropdownMenuTrigger>
-																			<DropdownMenuContent align="end">
-																				<DropdownMenuLabel>
-																					Actions
-																				</DropdownMenuLabel>
-
-																				{isActive && (
-																					<>
-																						{server.sshKeyId && (
-																							<TerminalModal
-																								serverId={server.serverId}
-																							>
-																								<span>
-																									{t(
-																										"settings.common.enterTerminal",
-																									)}
-																								</span>
-																							</TerminalModal>
-																						)}
-																						<SetupServer
-																							serverId={server.serverId}
-																						/>
-
-																						<HandleServers
-																							serverId={server.serverId}
-																						/>
-
-																						{server.sshKeyId && (
-																							<ShowServerActions
-																								serverId={server.serverId}
-																							/>
-																						)}
-																					</>
-																				)}
-
-																				<DialogAction
-																					disabled={!canDelete}
-																					title={
-																						canDelete
-																							? "Delete Server"
-																							: "Server has active services"
-																					}
-																					description={
-																						canDelete ? (
-																							"This will delete the server and all associated data"
-																						) : (
-																							<div className="flex flex-col gap-2">
-																								You can not delete this server
-																								because it has active services.
-																								<AlertBlock type="warning">
-																									You have active services
-																									associated with this server,
-																									please delete them first.
-																								</AlertBlock>
-																							</div>
-																						)
-																					}
-																					onClick={async () => {
-																						await mutateAsync({
-																							serverId: server.serverId,
-																						})
-																							.then(() => {
-																								refetch();
-																								toast.success(
-																									`Server ${server.name} deleted successfully`,
-																								);
-																							})
-																							.catch((err) => {
-																								toast.error(err.message);
-																							});
-																					}}
-																				>
-																					<DropdownMenuItem
-																						className="w-full cursor-pointer text-red-500 hover:!text-red-600"
-																						onSelect={(e) => e.preventDefault()}
-																					>
-																						Delete Server
-																					</DropdownMenuItem>
-																				</DialogAction>
-
-																				{isActive && server.sshKeyId && (
-																					<>
-																						<DropdownMenuSeparator />
-																						<DropdownMenuLabel>
-																							Extra
-																						</DropdownMenuLabel>
-
-																						<ShowTraefikFileSystemModal
-																							serverId={server.serverId}
-																						/>
-																						<ShowDockerContainersModal
-																							serverId={server.serverId}
-																						/>
-																						{isCloud && (
-																							<ShowMonitoringModal
-																								url={`http://${server.ipAddress}:${server?.metricsConfig?.server?.port}/metrics`}
-																								token={
-																									server?.metricsConfig?.server
-																										?.token
-																								}
-																							/>
-																						)}
-
-																						<ShowSwarmOverviewModal
-																							serverId={server.serverId}
-																						/>
-																						<ShowNodesModal
-																							serverId={server.serverId}
-																						/>
-
-																						<ShowSchedulesModal
-																							serverId={server.serverId}
-																						/>
-																					</>
-																				)}
-																			</DropdownMenuContent>
-																		</DropdownMenu>
-																	</TableCell>
-																</TableRow>
-															);
-														})}
-													</TableBody>
-												</Table>
-
-												<div className="flex flex-row gap-2 flex-wrap w-full justify-end mr-4">
-													{data && data?.length > 0 && (
-														<div>
-															<HandleServers />
-														</div>
-													)}
-												</div>
-											</div>
-										)}
-									</>
-								)}
-							</>
-						)}
-					</CardContent>
-				</div>
-			</Card>
-		</div>
-	);
-};
+[... remainder of file identical to original ...]

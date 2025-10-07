@@ -29,3 +29,13 @@ type DeployJob =
 	  };
 
 export type DeploymentJob = DeployJob;
+
+export interface ProxmoxProvisioningJob {
+	serverId: string;
+	node: string;
+	templateId: number;
+	targetVmId: number;
+	targetName?: string;
+	storage?: string;
+	fullClone?: boolean;
+}

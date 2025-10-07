@@ -64,6 +64,11 @@ void app.prepare().then(async () => {
 			console.log("Starting Deployment Worker");
 			const { deploymentWorker } = await import("./queues/deployments-queue");
 			await deploymentWorker.run();
+			console.log("Starting Proxmox Provisioning Worker");
+			const { provisioningWorker } = await import(
+				"./queues/provisioning-queue",
+			);
+			await provisioningWorker.run();
 		}
 	} catch (e) {
 		console.error("Main Server Error", e);

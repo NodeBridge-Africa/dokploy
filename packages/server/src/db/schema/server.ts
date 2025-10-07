@@ -25,6 +25,32 @@ import { sshKeys } from "./ssh-key";
 import { generateAppName } from "./utils";
 export const serverStatus = pgEnum("serverStatus", ["active", "inactive"]);
 
+export const serverProvisioner = pgEnum("serverProvisioner", ["manual", "proxmox"]);
+
+export const serverProvisioningStatus = pgEnum(
+	"serverProvisioningStatus",
+	["idle", "provisioning", "ready", "error"],
+);
+
+export type ServerProvisioningMetadata = {
+	templateId?: number;
+	templateName?: string;
+	storageId?: string;
+	storageType?: string;
+	diskSizeGb?: number;
+	networkBridge?: string;
+	cloudInit?: Record<string, unknown>;
+	lastTaskId?: string;
+	ipAddress?: string;
+	notes?: string;
+	proxmoxNode?: string;
+	proxmoxVmId?: number;
+	linkedAt?: string;
+	fullClone?: boolean;
+	targetHostname?: string;
+	lastTaskStatus?: string;
+};
+
 export const server = pgTable("server", {
 	serverId: text("serverId")
 		.notNull()
@@ -94,6 +120,18 @@ export const server = pgTable("server", {
 				},
 			},
 		}),
+	provisioner: serverProvisioner("provisioner")
+		.notNull()
+		.default("manual"),
+	provisioningStatus: serverProvisioningStatus("provisioningStatus")
+		.notNull()
+		.default("idle"),
+	provisioningMetadata: jsonb("provisioningMetadata")
+		.$type<ServerProvisioningMetadata>()
+		.notNull()
+		.default({}),
+	proxmoxNode: text("proxmoxNode"),
+	proxmoxVmId: integer("proxmoxVmId"),
 });
 
 export const serverRelations = relations(server, ({ one, many }) => ({
@@ -117,10 +155,42 @@ export const serverRelations = relations(server, ({ one, many }) => ({
 	schedules: many(schedules),
 }));
 
+export const serverProvisionerSchema = z.enum(["manual", "proxmox"] as const);
+
+export const serverProvisioningStatusSchema = z.enum(
+	["idle", "provisioning", "ready", "error"] as const,
+);
+
+export const provisioningMetadataSchema = z
+	.object({
+		templateId: z.number().optional(),
+		templateName: z.string().optional(),
+		storageId: z.string().optional(),
+		storageType: z.string().optional(),
+		diskSizeGb: z.number().optional(),
+		networkBridge: z.string().optional(),
+		cloudInit: z.record(z.any()).optional(),
+		lastTaskId: z.string().optional(),
+		ipAddress: z.string().optional(),
+		notes: z.string().optional(),
+		proxmoxNode: z.string().optional(),
+		proxmoxVmId: z.number().optional(),
+		linkedAt: z.string().optional(),
+		fullClone: z.boolean().optional(),
+		targetHostname: z.string().optional(),
+		lastTaskStatus: z.string().optional(),
+	})
+	.partial();
+
 const createSchema = createInsertSchema(server, {
 	serverId: z.string().min(1),
 	name: z.string().min(1),
 	description: z.string().optional(),
+	provisioner: serverProvisionerSchema.optional(),
+	provisioningStatus: serverProvisioningStatusSchema.optional(),
+	provisioningMetadata: provisioningMetadataSchema.optional(),
+	proxmoxNode: z.string().optional(),
+	proxmoxVmId: z.number().optional(),
 });
 
 export const apiCreateServer = createSchema
@@ -131,8 +201,21 @@ export const apiCreateServer = createSchema
 		port: true,
 		username: true,
 		sshKeyId: true,
+		provisioner: true,
+		proxmoxNode: true,
+		proxmoxVmId: true,
+		provisioningMetadata: true,
 	})
-	.required();
+	.required()
+	.extend({
+		sshKeyId: z.string().optional(),
+		provisioner: serverProvisionerSchema.optional().default("manual"),
+		proxmoxNode: z.string().optional(),
+		proxmoxVmId: z.number().optional(),
+		provisioningMetadata: provisioningMetadataSchema
+			.optional()
+			.default({}),
+	});
 
 export const apiFindOneServer = createSchema
 	.pick({
@@ -155,10 +238,19 @@ export const apiUpdateServer = createSchema
 		port: true,
 		username: true,
 		sshKeyId: true,
+		provisioner: true,
+		proxmoxNode: true,
+		proxmoxVmId: true,
+		provisioningMetadata: true,
 	})
 	.required()
 	.extend({
+		sshKeyId: z.string().optional(),
 		command: z.string().optional(),
+		provisioner: serverProvisionerSchema.optional(),
+		proxmoxNode: z.string().optional(),
+		proxmoxVmId: z.number().optional(),
+		provisioningMetadata: provisioningMetadataSchema.optional(),
 	});
 
 export const apiUpdateServerMonitoring = createSchema

@@ -1,10 +1,12 @@
 import {
 	createServer,
+	createSshKey,
 	defaultCommand,
 	deleteServer,
 	findServerById,
 	findServersByUserId,
 	findUserById,
+	generateSSHKey,
 	getPublicIpWithFallback,
 	haveActiveServices,
 	IS_CLOUD,
@@ -39,6 +41,7 @@ import {
 	redis,
 	server,
 } from "@/server/db/schema";
+import { provisioningQueue } from "@/server/queues/queueSetup";
 
 export const serverRouter = createTRPCRouter({
 	create: protectedProcedure
@@ -57,10 +60,105 @@ export const serverRouter = createTRPCRouter({
 						message: "You cannot create more servers",
 					});
 				}
+				const serverPayload: typeof input = { ...input };
+				let resolvedSshKeyId = serverPayload.sshKeyId;
+				if (!resolvedSshKeyId) {
+					const keyPair = await generateSSHKey("ed25519");
+					const autoKey = await createSshKey({
+						name: `${serverPayload.name} SSH Key`,
+						description: `Auto-generated for server ${serverPayload.name}`,
+						publicKey: keyPair.publicKey,
+						privateKey: keyPair.privateKey,
+						organizationId: ctx.session.activeOrganizationId,
+					});
+					resolvedSshKeyId = autoKey.sshKeyId;
+				}
+				if (!resolvedSshKeyId) {
+					throw new TRPCError({
+						code: "INTERNAL_SERVER_ERROR",
+						message: "Failed to generate SSH key for the server",
+					});
+				}
+				serverPayload.sshKeyId = resolvedSshKeyId;
+
 				const project = await createServer(
-					input,
+					serverPayload,
 					ctx.session.activeOrganizationId,
 				);
+
+				const projectWithMeta = project as typeof project & {
+					provisioner?: string;
+					provisioningMetadata?: Record<string, any> | null;
+					proxmoxNode?: string | null;
+					proxmoxVmId?: number | null;
+				};
+
+				if (projectWithMeta.provisioner === "proxmox") {
+					const metadataInput =
+						(projectWithMeta.provisioningMetadata ||
+							{}) as Record<string, any>;
+					const node =
+						(typeof metadataInput.proxmoxNode === "string"
+							? metadataInput.proxmoxNode
+							: undefined) || projectWithMeta.proxmoxNode || undefined;
+					const templateId =
+						typeof metadataInput.templateId === "number"
+							? metadataInput.templateId
+							: undefined;
+					const targetVmId =
+						typeof metadataInput.proxmoxVmId === "number"
+							? metadataInput.proxmoxVmId
+							: projectWithMeta.proxmoxVmId ?? undefined;
+					const targetNameValue =
+						typeof metadataInput.targetHostname === "string"
+							? metadataInput.targetHostname
+							: project.name;
+					const storageIdValue =
+						typeof metadataInput.storageId === "string"
+							? metadataInput.storageId
+							: undefined;
+					const fullCloneValue =
+						typeof metadataInput.fullClone === "boolean"
+							? metadataInput.fullClone
+							: true;
+
+					if (node && templateId && targetVmId) {
+						const metadataToPersist = {
+							...metadataInput,
+							proxmoxNode: node,
+							proxmoxVmId: targetVmId,
+							templateId,
+							targetHostname: targetNameValue,
+							storageId: storageIdValue,
+							fullClone: fullCloneValue,
+						};
+
+						await updateServerById(
+							project.serverId,
+							{
+								provisioningStatus: "provisioning",
+								provisioningMetadata: metadataToPersist,
+							} as any,
+						);
+
+						await provisioningQueue
+							.add("provision", {
+								serverId: project.serverId,
+								node,
+								templateId,
+								targetVmId,
+								targetName: targetNameValue,
+								storage: storageIdValue,
+								fullClone: fullCloneValue,
+							})
+							.catch((queueError) => {
+								console.error(
+									"Failed to enqueue Proxmox provisioning job",
+									queueError,
+								);
+							});
+					}
+				}
 				return project;
 			} catch (error) {
 				throw new TRPCError({

@@ -5,12 +5,26 @@ const myQueue = new Queue("deployments", {
 	connection: redisConfig,
 });
 
+const provisioningQueue = new Queue("proxmox-provisioning", {
+	connection: redisConfig,
+});
+
 process.on("SIGTERM", () => {
 	myQueue.close();
+	provisioningQueue.close();
 	process.exit(0);
 });
 
 myQueue.on("error", (error) => {
+	if ((error as any).code === "ECONNREFUSED") {
+		console.error(
+			"Make sure you have installed Redis and it is running.",
+			error,
+		);
+	}
+});
+
+provisioningQueue.on("error", (error) => {
 	if ((error as any).code === "ECONNREFUSED") {
 		console.error(
 			"Make sure you have installed Redis and it is running.",
@@ -41,4 +55,4 @@ export const cleanQueuesByCompose = async (composeId: string) => {
 	}
 };
 
-export { myQueue };
+export { myQueue, provisioningQueue };

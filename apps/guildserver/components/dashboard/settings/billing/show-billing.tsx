@@ -28,8 +28,33 @@ import { BRAND_NAME } from "@/lib/brand";
 import { cn } from "@/lib/utils";
 import { api } from "@/utils/api";
 
-const stripePromise = loadStripe(
-	process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY!,
+const stripePublishableKey = process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY;
+const stripePromise = stripePublishableKey ? loadStripe(stripePublishableKey) : null;
+
+const DisabledBilling = () => (
+	<div className="w-full">
+		<Card className="h-full bg-sidebar p-2.5 rounded-xl max-w-5xl mx-auto">
+			<div className="rounded-xl bg-background shadow-md">
+				<CardHeader>
+					<CardTitle className="text-xl flex flex-row gap-2">
+						<CreditCard className="size-6 text-muted-foreground self-center" />
+						Billing
+					</CardTitle>
+					<CardDescription>
+						Billing is disabled for this instance
+					</CardDescription>
+				</CardHeader>
+				<CardContent className="space-y-4 py-8 border-t">
+					<div className="text-center">
+						<p className="text-muted-foreground">
+							Stripe billing has been disabled. You can use all features without any
+							restrictions.
+						</p>
+					</div>
+				</CardContent>
+			</div>
+		</Card>
+	</div>
 );
 
 // TODO: Change this to the actual price
@@ -42,37 +67,13 @@ export const calculatePrice = (count: number, isAnnual = false) => {
 	return count * 1.3;
 };
 export const ShowBilling = () => {
+	if (!STRIPE_ENABLED) {
+		return <DisabledBilling />;
+	}
+
 	const { data: servers } = api.server.count.useQuery();
 	const { data: admin } = api.user.get.useQuery();
 	const { data, isLoading } = api.stripe.getProducts.useQuery();
-
-	if (!STRIPE_ENABLED) {
-		return (
-			<div className="w-full">
-				<Card className="h-full bg-sidebar p-2.5 rounded-xl max-w-5xl mx-auto">
-					<div className="rounded-xl bg-background shadow-md">
-						<CardHeader>
-							<CardTitle className="text-xl flex flex-row gap-2">
-								<CreditCard className="size-6 text-muted-foreground self-center" />
-								Billing
-							</CardTitle>
-							<CardDescription>
-								Billing is disabled for this instance
-							</CardDescription>
-						</CardHeader>
-						<CardContent className="space-y-4 py-8 border-t">
-							<div className="text-center">
-								<p className="text-muted-foreground">
-									Stripe billing has been disabled. You can use all features
-									without any restrictions.
-								</p>
-							</div>
-						</CardContent>
-					</div>
-				</Card>
-			</div>
-		);
-	}
 	const { mutateAsync: createCheckoutSession } =
 		api.stripe.createCheckoutSession.useMutation();
 

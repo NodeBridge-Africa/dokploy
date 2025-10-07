@@ -9,17 +9,25 @@ import { eq } from "drizzle-orm";
 
 export type Server = typeof server.$inferSelect;
 
+const omitUndefined = <T extends Record<string, unknown>>(value: T) => {
+	return Object.fromEntries(
+		Object.entries(value).filter(([, current]) => current !== undefined),
+	) as Partial<T>;
+};
+
 export const createServer = async (
 	input: typeof apiCreateServer._type,
 	organizationId: string,
 ) => {
+	const insertPayload: typeof server.$inferInsert = {
+		...input,
+		organizationId,
+		createdAt: new Date().toISOString(),
+	};
+
 	const newServer = await db
 		.insert(server)
-		.values({
-			...input,
-			organizationId: organizationId,
-			createdAt: new Date().toISOString(),
-		})
+		.values(insertPayload)
 		.returning()
 		.then((value) => value[0]);
 
@@ -113,9 +121,7 @@ export const updateServerById = async (
 ) => {
 	const result = await db
 		.update(server)
-		.set({
-			...serverData,
-		})
+		.set(omitUndefined(serverData))
 		.where(eq(server.serverId, serverId))
 		.returning()
 		.then((res) => res[0]);
